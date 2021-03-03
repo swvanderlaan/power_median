@@ -360,7 +360,11 @@ ggsave(paste0(PLOT_loc, "/",PROJECTNAME,".power.png"), plot = last_plot())
 
 Based on this simulation and the Winner's curse that exists for small sized studies we conclude the following:
 
-    "The expected difference between group is likely much smaller than the delta of 31 based on Kartal _et al._; we expect it to be around 20 or smaller. Thus, for a power of >80%, with an expected total sample size of 720, a 10% case-rate, and to enable sex-stratified biomarker discovery, we would require 50-80 samples in each group."
+    "The expected difference between group is likely much smaller than the delta 
+    of 31 based on Kartal _et al._; we expect it to be around 20 or smaller. 
+    Thus, for a power of >80%, with an expected total sample size of 720, 
+    a 10% case-rate, and to enable sex-stratified biomarker discovery, 
+    we would require 50-80 samples in each group."
 
 
 
