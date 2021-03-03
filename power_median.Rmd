@@ -1,0 +1,400 @@
+---
+title: "Power calculation for stroke diagnosis in acute vertigo"
+author: "[Sander W. van der Laan, PhD](https://swvanderlaan.github.io) | @swvanderlaan | s.w.vanderlaan@gmail.com"
+date: "`r Sys.Date()`"
+output:
+  html_notebook:
+    cache: yes
+    code_folding: hide
+    collapse: yes
+    df_print: paged
+    fig.align: center
+    fig_caption: yes
+    fig_height: 6
+    fig_retina: 2
+    fig_width: 7
+    highlight: tango
+    theme: lumen
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: yes
+mainfont: Arial
+subtitle: "A 'druggable-MI-targets' project"
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r global_options, include = FALSE}
+# further define some knitr-options.
+knitr::opts_chunk$set(fig.width = 12, fig.height = 8, fig.path = 'Figures/', 
+                      wwarning = TRUE, # show warnings during codebook generation
+  message = TRUE, # show messages during codebook generation
+  error = TRUE, # do not interrupt codebook generation in case of errors,
+                # usually better for debugging
+  echo = TRUE,  # show R code
+                      eval = TRUE)
+ggplot2::theme_set(ggplot2::theme_minimal())
+pander::panderOptions("table.split.table", Inf)
+```
+
+# Setup
+We will clean the environment, setup the locations, define colors, and create a datestamp.
+
+_Clean the environment._
+```{r echo = FALSE}
+rm(list = ls())
+```
+
+_Set locations and working directories..._
+```{r LocalSystem, echo = FALSE}
+### Operating System Version
+### Mac Pro
+# ROOT_loc = "/Volumes/EliteProQx2Media"
+# GENOMIC_loc = "/Users/svanderlaan/iCloud/Genomics"
+# PLINK_loc=paste0(ROOT_loc,"/PLINK")
+# PROJECT_loc = paste0(ROOT_loc, "/PLINK/analyses/grants/power_median")
+
+### MacBook
+ROOT_loc = "/Users/slaan3"
+GENOMIC_loc = paste0(ROOT_loc, "/iCloud/Genomics")
+PLINK_loc=paste0(ROOT_loc,"/PLINK")
+PROJECT_loc = paste0(ROOT_loc, "/PLINK/analyses/grants/power_median")
+
+### SOME VARIABLES WE NEED DOWN THE LINE
+PROJECTNAME = "VERTIGOPOWER"
+
+cat("\nCreate a new analysis directory...\n")
+ifelse(!dir.exists(file.path(PROJECT_loc, "/",PROJECTNAME)), 
+       dir.create(file.path(PROJECT_loc, "/",PROJECTNAME)), 
+       FALSE)
+ANALYSIS_loc = paste0(PROJECT_loc,"/",PROJECTNAME)
+
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/PLOTS")), 
+       dir.create(file.path(ANALYSIS_loc, "/PLOTS")), 
+       FALSE)
+PLOT_loc = paste0(ANALYSIS_loc,"/PLOTS")
+
+ifelse(!dir.exists(file.path(ANALYSIS_loc, "/OUTPUT")), 
+       dir.create(file.path(ANALYSIS_loc, "/OUTPUT")), 
+       FALSE)
+OUT_loc = paste0(ANALYSIS_loc, "/OUTPUT")
+
+setwd(paste0(PROJECT_loc))
+getwd()
+list.files()
+
+```
+
+_... a package-installation function ..._
+```{r Function: installations}
+install.packages.auto <- function(x) { 
+  x <- as.character(substitute(x)) 
+  if(isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else { 
+    # Update installed packages - this may mean a full upgrade of R, which in turn
+    # may not be warrented. 
+    #update.install.packages.auto(ask = FALSE) 
+    eval(parse(text = sprintf("install.packages(\"%s\", dependencies = TRUE, repos = \"https://cloud.r-project.org/\")", x)))
+  }
+  if(isTRUE(x %in% .packages(all.available = TRUE))) { 
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  } else {
+    if (!requireNamespace("BiocManager"))
+      install.packages("BiocManager")
+    BiocManager::install() # this would entail updating installed packages, which in turned may not be warrented
+    
+    # Code for older versions of R (<3.5.0)
+    # source("http://bioconductor.org/biocLite.R")
+    # Update installed packages - this may mean a full upgrade of R, which in turn
+    # may not be warrented.
+    # biocLite(character(), ask = FALSE) 
+    eval(parse(text = sprintf("BiocManager::install(\"%s\")", x)))
+    eval(parse(text = sprintf("require(\"%s\")", x)))
+  }
+}
+```
+
+_... and load those packages._
+```{r loading_packages, message=FALSE, warning=FALSE}
+install.packages.auto("readr")
+install.packages.auto("optparse")
+install.packages.auto("tools")
+install.packages.auto("dplyr")
+install.packages.auto("tidyr")
+install.packages.auto("naniar")
+
+# To get 'data.table' with 'fwrite' to be able to directly write gzipped-files
+# Ref: https://stackoverflow.com/questions/42788401/is-possible-to-use-fwrite-from-data-table-with-gzfile
+# install.packages("data.table", repos = "https://Rdatatable.gitlab.io/data.table")
+library(data.table)
+
+install.packages.auto("tidyverse")
+install.packages.auto("knitr")
+install.packages.auto("DT")
+install.packages.auto("eeptools")
+
+# Install the devtools package from Hadley Wickham
+install.packages.auto('devtools')
+
+# for plotting
+install.packages.auto("ggplot2")
+install.packages.auto("ggpubr")
+install.packages.auto("UpSetR")
+devtools::install_github("thomasp85/patchwork")
+
+# For power calculations
+install.packages("estmeansd")
+install.packages.auto("pwr")
+
+```
+
+_We will create a datestamp and define the Utrecht Science Park Colour Scheme_.
+```{r Setting: Colors}
+
+Today = format(as.Date(as.POSIXlt(Sys.time())), "%Y%m%d")
+Today.Report = format(as.Date(as.POSIXlt(Sys.time())), "%A, %B %d, %Y")
+
+### UtrechtScienceParkColoursScheme
+###
+### WebsitetoconvertHEXtoRGB:http://hex.colorrrs.com.
+### Forsomefunctionsyoushoulddividethesenumbersby255.
+###
+###	No.	Color			      HEX	(RGB)						              CHR		  MAF/INFO
+###---------------------------------------------------------------------------------------
+###	1	  yellow			    #FBB820 (251,184,32)				      =>	1		or 1.0>INFO
+###	2	  gold			      #F59D10 (245,157,16)				      =>	2		
+###	3	  salmon			    #E55738 (229,87,56)				      =>	3		or 0.05<MAF<0.2 or 0.4<INFO<0.6
+###	4	  darkpink		    #DB003F ((219,0,63)				      =>	4		
+###	5	  lightpink		    #E35493 (227,84,147)				      =>	5		or 0.8<INFO<1.0
+###	6	  pink			      #D5267B (213,38,123)				      =>	6		
+###	7	  hardpink		    #CC0071 (204,0,113)				      =>	7		
+###	8	  lightpurple	    #A8448A (168,68,138)				      =>	8		
+###	9	  purple			    #9A3480 (154,52,128)				      =>	9		
+###	10	lavendel		    #8D5B9A (141,91,154)				      =>	10		
+###	11	bluepurple		  #705296 (112,82,150)				      =>	11		
+###	12	purpleblue		  #686AA9 (104,106,169)			      =>	12		
+###	13	lightpurpleblue	#6173AD (97,115,173/101,120,180)	=>	13		
+###	14	seablue			    #4C81BF (76,129,191)				      =>	14		
+###	15	skyblue			    #2F8BC9 (47,139,201)				      =>	15		
+###	16	azurblue		    #1290D9 (18,144,217)				      =>	16		or 0.01<MAF<0.05 or 0.2<INFO<0.4
+###	17	lightazurblue	  #1396D8 (19,150,216)				      =>	17		
+###	18	greenblue		    #15A6C1 (21,166,193)				      =>	18		
+###	19	seaweedgreen	  #5EB17F (94,177,127)				      =>	19		
+###	20	yellowgreen		  #86B833 (134,184,51)				      =>	20		
+###	21	lightmossgreen	#C5D220 (197,210,32)				      =>	21		
+###	22	mossgreen		    #9FC228 (159,194,40)				      =>	22		or MAF>0.20 or 0.6<INFO<0.8
+###	23	lightgreen	  	#78B113 (120,177,19)				      =>	23/X
+###	24	green			      #49A01D (73,160,29)				      =>	24/Y
+###	25	grey			      #595A5C (89,90,92)				        =>	25/XY	or MAF<0.01 or 0.0<INFO<0.2
+###	26	lightgrey		    #A2A3A4	(162,163,164)			      =>	26/MT
+###
+###	ADDITIONAL COLORS
+###	27	midgrey			#D7D8D7
+###	28	verylightgrey	#ECECEC"
+###	29	white			#FFFFFF
+###	30	black			#000000
+###----------------------------------------------------------------------------------------------
+
+uithof_color = c("#FBB820","#F59D10","#E55738","#DB003F","#E35493","#D5267B",
+                 "#CC0071","#A8448A","#9A3480","#8D5B9A","#705296","#686AA9",
+                 "#6173AD","#4C81BF","#2F8BC9","#1290D9","#1396D8","#15A6C1",
+                 "#5EB17F","#86B833","#C5D220","#9FC228","#78B113","#49A01D",
+                 "#595A5C","#A2A3A4", "#D7D8D7", "#ECECEC", "#FFFFFF", "#000000")
+
+uithof_color_legend = c("#FBB820", "#F59D10", "#E55738", "#DB003F", "#E35493",
+                        "#D5267B", "#CC0071", "#A8448A", "#9A3480", "#8D5B9A",
+                        "#705296", "#686AA9", "#6173AD", "#4C81BF", "#2F8BC9",
+                        "#1290D9", "#1396D8", "#15A6C1", "#5EB17F", "#86B833",
+                        "#C5D220", "#9FC228", "#78B113", "#49A01D", "#595A5C",
+                        "#A2A3A4", "#D7D8D7", "#ECECEC", "#FFFFFF", "#000000")
+### ----------------------------------------------------------------------------
+```
+
+# Introduction
+
+We aim to discover biomarkers that differentiate strokes from non-strokes in acute vertigo patients at the emergency department. Given the differences in stroke risk and vertigo presentation of the sexes, we aim to discover sex-specific biomarkers. For this study we will include around 800 patients, and expect a drop-out of roughly 10%. Approximately 10% of the total sample size will be cases, _i.e._ patients with stroke.
+
+To this end, we need to calculate the sample size needed to find a significant difference (p < 0.05) with a power of >80% between groups.
+
+Earlier studies provide some insight in the expected differences between groups. For instance Kartal _et al._ reported on S100B for differential diagnosis of stroke in vertigo patients^[Kartal et al. https://doi.org/10.1111/acem.12420].
+
+> **Abstract**
+> *Objectives*: Vertigo is a common presenting complaint resulting from central or peripheral etiologies. Because central > causes may be life-threatening, ascertaining the nature of the vertigo is crucial in the emergency department (ED). With > a broad range of potential etiologies, distinguishing central causes from benign peripheral causes is a diagnostic > challenge. Cranial magnetic resonance imaging (MRI) is the recommended neuroimaging method when clinical findings are > ambiguous. However, MRI scanning for every patient with an uncertain diagnosis may not be efficient or possible. > Therefore, to improve ED resource utilization for patients with vertigo, there is a need to identify the subset most > likely to have MRI abnormalities. It has previously been shown that S100B protein provides a useful serum marker of > stroke, subarachnoid hemorrhage, and traumatic brain injury. This study evaluated whether S100B levels could predict > central causes of vertigo as identified by cranial MRI in the ED.
+> 
+> *Methods*: This prospective, observational study was conducted with adult patients with acute-onset vertigo (within 6 > hours) in the ED of a teaching hospital in Kocaeli, Turkey. Patients with nausea or dizziness complaints without > previously known vertigo or cranial pathology, and who agreed to participate in the study, were included. Patients with > trauma or with neurologic findings that developed concurrent with their symptoms were excluded. Serum levels of S100B > were measured with an electrochemiluminescence immunoassay kit. All subjects underwent cranial MRI. The predictors of > positive MRI results were evaluated using logistic regression analysis. Sensitivity and specificity of S100B​ levels for > identifying subjects with central causes of vertigo on MRI were calculated with receiver operating characteristic (ROC) > curve.
+> 
+> *Results*: Of the 82 subjects included in the study, 48 (58.5%) were female, and the mean (±SD) age was 51 (±16) years. > Thirty-one (37.8%) subjects had positive MRI results. Median (with interquartile range [IQR]) serum S100B levels were > significantly different between MRI-negative and MRI-positive groups (median = 27.00 pg/mL, IQR = 10.00 to 44.60 vs. > median = 60.94 pg/mL, IQR = 38.25 to 77.95, respectively; p = 0.04). In logistic regression analysis, subjective "he or > she is spinning" (p = 0.030, odds ratio [OR] = 1.63, 95% confidence interval [CI] = 1.38 to 2.49), systolic blood > pressure (sBP; p = 0.045, OR = 1.044, 95% CI = 1.021 to 1.080), and serum S100B level (p = 0.042, OR = 1.22, 95% CI = > 1.018 to 1.445) were found to be independent predictors of MRI abnormalities. In the ROC analysis, S100B > 30 pg/mL > predicted the clinical outcome with 83.9% sensitivity (95% CI = 66.3% to 94.5%) and 51.0% specificity (95% CI = 36.6% to > 65.2%). The area under the ROC curve was 0.774 (95% CI = 0.666 to 0.881).
+> 
+> *Conclusions*: To the best of our knowledge this is the first study assessing the utility of serum S100B levels for > diagnosis of acute-onset vertigo. Serum S100B levels are associated with the presence of central causes of vertigo on > cranial MRI. However, serum S100B levels are not sufficiently sensitive to exclude candidates from cranial MRI.
+
+The issue here is that we don't have means and standard deviations, we have medians and interquartile ranges. However, there are methods that can estimate means and standard deviations from a null distribution.
+
+For instance: 
+- http://bmcmedresmethodol.biomedcentral.com/articles/10.1186/1471-2288-14-135
+- https://cran.r-project.org/web/packages/estmeansd/estmeansd.pdf and https://github.com/stmcg/estmeansd
+
+The latter method is based on [MacGrath et al. 2020](https://journals.sagepub.com/doi/full/10.1177/0962280219889080), and available as an `R`-package, `estmeansd`. We can is easily implement this.
+
+# Load data
+First we will get these data in some variables.
+
+```{r LoadData}
+median_stroke <- 60.9
+q1_stroke <- 38.25
+q3_stroke <- 77.95
+n_stroke <- 31
+
+median_nonstroke <- 27
+q1_nonstroke <- 10
+q3_nonstroke <- 44.6
+n_nonstroke <- 51
+
+sample_size = n_stroke + n_nonstroke
+
+# Reference: - https://stats.stackexchange.com/questions/256456/how-to-calculate-mean-and-standard-deviation-from-median-and-quartiles
+# (sd_stroke <- (q3_stroke - q1_stroke) / (2 * (qnorm((0.75 * n_stroke - 0.125) / (n_stroke + 0.25)))))
+# 
+# (sd_nonstroke <- (q3_nonstroke - q1_nonstroke) / (2 * (qnorm((0.75 * n_nonstroke - 0.125) / (n_nonstroke + 0.25)))))
+
+```
+
+## Calculate standard deviation
+Now we can estimate the standard deviation from the interquartile ranges using the `estmeansd` package.
+
+```{r EstimatedMeans}
+library(estmeansd)
+# ?estmeansd::qe.mean.sd()
+qe.stroke <- qe.mean.sd(med.val = median_stroke,
+                        q1.val = q1_stroke, 
+                        q3.val = q3_stroke,
+                        n = n_stroke) 
+qe.stroke
+qe.nonstroke <- qe.mean.sd(med.val = median_nonstroke,
+                        q1.val = q1_nonstroke, 
+                        q3.val = q3_nonstroke,
+                        n = n_nonstroke) 
+qe.nonstroke
+```
+
+
+# Power for Kartal et al.
+
+Now that we estimated mean and standard deviation in each group, we can estimate the power for the study from Kartal _et al._
+```{r power Kartal}
+# Referece: https://publicifsv.sund.ku.dk/~tag/Teaching/share/R-tutorials/Basic-statistics/Power.html
+mu = qe.stroke$est.mean
+mu0 = qe.nonstroke$est.mean
+sd = mean(qe.stroke$est.sd, qe.nonstroke$est.sd)
+cat("Average standard deviation:\n")
+sd
+cat("\nDifference between means:\n")
+mu_delta = mu - mu0
+mu_delta
+
+
+alpha = 0.05
+beta = 0.20
+n = (sd*(qnorm(1-alpha/2)+qnorm(1-beta))/(mu-mu0))^2
+# ceiling(n)
+z=(mu-mu0)/sd*sqrt(n)
+
+cat("\nEstimated power (range: 0 - 1):\n")
+(Power=pnorm(z-qnorm(1-alpha/2))+pnorm(-z-qnorm(1-alpha/2)))
+
+
+```
+
+# Simulate power for Vertigo
+
+Small studies, like Kartal _et al._ usually overestimate the true effects. There is tons of literature on this topic, for instance [Zhang Z., _et al._](https://doi.org/10.1186/cc11919), [Button K.S., _et al._](https://doi.org/10.1038/nrn3475), and [Thambisetty M., _et al._](https://pubmed.ncbi.nlm.nih.gov/28119051/). 
+
+Thus, we expect that with larger studies the difference between groups will be smaller, and that the standard deviation will also change. Based on the data from Kartal _et al._ we can simulate some scenarios for a given power of 80%, and three standard deviations. 
+
+> Note, we assume that measurements of biomarkers are in pg/mL, like in Kartal _et al._
+
+```{r SimulatePower, message=FALSE, warning=FALSE}
+
+differences <- seq(from = 10, to = 35, by = 2)
+samplesize.sd20 <- sapply(differences,
+                          function(d){power.t.test(power = 0.8,
+                                                   delta = d,
+                                                   sd = 20,
+                                                   type = "two.sample")$n})
+samplesize.sd30 <- sapply(differences,
+                          function(d){power.t.test(power = 0.8,
+                                                   delta = d,
+                                                   sd = 30,
+                                                   type = "two.sample")$n})
+
+samplesize.sd40 <- sapply(differences,
+                          function(d){power.t.test(power = 0.8,
+                                                   delta = d,
+                                                   sd = 40,
+                                                   type = "two.sample")$n})
+
+sim_vertigo_power <- data.frame(differences,
+                                samplesize.sd20, samplesize.sd30, samplesize.sd40)
+names(sim_vertigo_power)[names(sim_vertigo_power) == "samplesize.sd20"] <- "SD20"
+names(sim_vertigo_power)[names(sim_vertigo_power) == "samplesize.sd30"] <- "SD30"
+names(sim_vertigo_power)[names(sim_vertigo_power) == "samplesize.sd40"] <- "SD40"
+
+p1 <- ggpubr::ggline(sim_vertigo_power,
+                     x = "differences", c("SD20", "SD30", "SD40"),
+                     merge = TRUE,
+                     palette = "npg", 
+                     title = "Sample sizes needed for 80% power",
+                     xlab = "Expected difference between stroke vs. non-strokes", 
+                     ylab = "Required sample size (each group)")
+ggpar(p1, 
+      legend = "right", legend.title = "Standard deviations",
+      # font.legend = c(10, "bold"),
+      xtickslab.rt = 45)
+
+ggsave(paste0(PLOT_loc, "/",PROJECTNAME,".power.png"), plot = last_plot())
+
+```
+
+# Conclusions
+
+Based on this simulation and the Winner's curse that exists for small sized studies we conclude the following:
+
+    "The expected difference between group is likely much smaller than the delta of 31 based on Kartal _et al._; we expect it to be around 20 or smaller. Thus, for a power of >80%, with an expected total sample size of 720, a 10% case-rate, and to enable sex-stratified biomarker discovery, we would require 50-80 samples in each group."
+
+
+
+
+# Session information
+
+------
+
+    Version:      v1.0.0
+    Last update:  2021-03-03
+    Written by:   Sander W. van der Laan (s.w.vanderlaan-2[at]umcutrecht.nl).
+    Description:  Script to get calculate power using published data.
+    Minimum requirements: R version 3.4.3 (2017-06-30) -- 'Single Candle', Mac OS X El Capitan
+    
+    Changes log
+    * v1.0.0 Initial version. 
+
+------
+
+```{r eval = TRUE}
+sessionInfo()
+```
+
+# Saving environment
+```{r Saving}
+save.image(paste0(PROJECT_loc, "/",Today,".",PROJECTNAME,".results.RData"))
+```
+
+------
+<sup>&copy; 1979-2021 Sander W. van der Laan | s.w.vanderlaan[at]gmail.com | [swvanderlaan.github.io](https://swvanderlaan.github.io).</sup>
+------
+
+  
+  
+  
+
+
