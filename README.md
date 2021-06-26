@@ -1,5 +1,7 @@
 # Power calculation for stroke diagnosis in acute vertigo
 
+[![DOI](https://zenodo.org/badge/344254761.svg)](https://zenodo.org/badge/latestdoi/344254761)
+
 We aim to discover biomarkers that differentiate strokes from non-strokes in acute vertigo patients at the emergency department. Given the differences in stroke risk and vertigo presentation of the sexes, we aim to discover sex-specific biomarkers. For this study we will include around 800 patients, and expect a drop-out of roughly 10%. Approximately 10% of the total sample size will be cases, _i.e._ patients with stroke.
 
 To this end, we need to calculate the sample size needed to find a significant difference (p < 0.05) with a power of >80% between groups.
