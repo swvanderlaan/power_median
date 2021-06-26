@@ -4,7 +4,7 @@ We aim to discover biomarkers that differentiate strokes from non-strokes in acu
 
 To this end, we need to calculate the sample size needed to find a significant difference (p < 0.05) with a power of >80% between groups.
 
-Earlier studies provide some insight in the expected differences between groups. For instance Kartal _et al._ reported on S100B for differential diagnosis of stroke in vertigo patients^[Kartal et al. https://doi.org/10.1111/acem.12420].
+Earlier studies provide some insight in the expected differences between groups. For instance Kartal _et al._ reported on S100B for differential diagnosis of stroke in vertigo patients<sup>1</sup>.
 
 The issue here is that we don't have means and standard deviations, we have medians and interquartile ranges. However, there are methods that can estimate means and standard deviations from a null distribution.
 
@@ -16,7 +16,7 @@ The latter method is based on [MacGrath et al. 2020](https://journals.sagepub.co
 
 Based on this simulation and the Winner's curse that exists for small sized studies we conclude the following:
 
-    "The expected difference between group is likely much smaller than the delta of 31 based on Kartal _et al._; we expect it to be around 20 or smaller. Thus, for a power of >80%, with an expected total sample size of 720, a 10% case-rate, and to enable sex-stratified biomarker discovery, we would require 50-80 samples in each group."
+    "The expected difference between group is likely much smaller than the estimated delta of the mean of 31 based on Kartal _et al._; we expect it to be around 20 or smaller. Thus, for a power of >80%, with an expected total sample size of 720, a 10% case-rate, and to enable sex-stratified biomarker discovery, we would require 50-80 samples in each group."
 
 
 ![Figure 1](VERTIGOPOWER/PLOTS/VERTIGOPOWER.power.png)
@@ -36,9 +36,11 @@ The code will work within the context of R version 4.0.4 (2018-12-20) -- 'Eggshe
 
 #### Versions
 
+* v1.0.1 Fixed reference. Edit explanation.
 * v1.0.0 Initial version.
 
-
+#### References
+1. [Kartal A.G. _et al._ Ac Em Med 2014](https://doi.org/10.1111/acem.12420).
 --------------
 
 #### The MIT License (MIT)
